@@ -27,7 +27,6 @@ main{padding:2rem;}
 .product:hover,.set:hover{transform:translateY(-5px);box-shadow:0 0 10px #00ffff;}
 .product img,.set img{width:100%;border-radius:10px;margin-bottom:0.5rem;cursor:pointer;}
 .edit-btn{display:none;position:absolute;top:0.5rem;right:0.5rem;background:#00ffff;color:#000;padding:0.3rem 0.5rem;border-radius:5px;cursor:pointer;}
-.product input,.set input,.set select{display:none;margin-bottom:0.5rem;width:90%;}
 .plus-btn{position:absolute;top:0.5rem;left:0.5rem;background:#00ffff;color:#000;padding:0.3rem 0.5rem;border-radius:50%;cursor:pointer;font-weight:bold;font-size:1.2rem;display:none;}
 #sets h2{margin-bottom:1rem;color:#00ffff;}
 footer{background:#111;text-align:center;padding:1rem;margin-top:3rem;}
@@ -89,6 +88,7 @@ footer a{color:#00ffff;margin:0 0.5rem;text-decoration:none;}
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
 
 <script>
+// Firebase konfigurieren
 const firebaseConfig = {
   apiKey: "AIzaSyC3llqOYDV2GJrg5NAEThQe0tI8LDqQpD4",
   authDomain: "lamacos-technolygies.firebaseapp.com",
@@ -117,14 +117,17 @@ const setList = document.getElementById('setList');
 let products = [];
 let sets = [];
 
+// Login Modal öffnen
 rgbCorner.addEventListener('click', ()=>{ loginModal.classList.toggle('active'); });
 
+// ------------------ LOGIN ------------------
 async function login(){
   const code = document.getElementById('loginCode').value;
   if(code===correctCode){
-    loggedIn=true;
+    loggedIn = true;
     loginModal.classList.remove('active');
     showButtons();
+    await loadCover();
     await loadProducts();
     renderProducts();
     await loadSets();
@@ -133,13 +136,13 @@ async function login(){
   }else alert('Falscher Code!');
 }
 
-// ------------------ Funktionen ------------------
 function showButtons(){
   coverUploadBtn.style.display='block';
   addProductBtn.style.display='inline-block';
   addSetBtn.style.display='inline-block';
 }
 
+// ------------------ DATEI AUSWÄHLEN ------------------
 function selectFile(){
   return new Promise(resolve=>{
     const input=document.createElement('input');
@@ -156,10 +159,9 @@ async function uploadFile(file,path){
   return await ref.getDownloadURL();
 }
 
-// ------------------ Cover ------------------
+// ------------------ COVER ------------------
 coverUploadBtn.addEventListener('click', ()=> coverInput.click());
 coverInput.addEventListener('change', async (e)=>{
-  if(!loggedIn) return;
   const file = e.target.files[0];
   if(!file) return;
   const url = await uploadFile(file,'home/cover.png');
@@ -167,7 +169,15 @@ coverInput.addEventListener('change', async (e)=>{
   await db.collection('home').doc('cover').set({img:url});
 });
 
-// ------------------ Produkte ------------------
+// Cover beim Start laden
+async function loadCover(){
+  const doc = await db.collection('home').doc('cover').get();
+  if(doc.exists){
+    coverImg.src = doc.data().img;
+  }
+}
+
+// ------------------ PRODUKTE ------------------
 async function loadProducts(){
   const snapshot = await db.collection('products').get();
   products = snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
@@ -179,17 +189,17 @@ function renderProducts(){
     const div = document.createElement('div');
     div.className='product';
     div.innerHTML=`
-      <img src="${p.img}" alt="${p.name}" onclick="editProductImage('${p.id}')">
+      <img src="${p.img}" alt="${p.name}">
       <h3>${p.name}</h3>
       <p>Preis: <span>${p.price}</span></p>
-      ${loggedIn?'<span class="edit-btn" onclick="editProduct(\''+p.id+'\', this)">Bearbeiten</span>':''}
+      ${loggedIn?'<span class="edit-btn" onclick="editProduct(\''+p.id+'\')">Bearbeiten</span>':''}
     `;
     productGallery.appendChild(div);
   });
 }
 
 // Produkt bearbeiten
-async function editProduct(id,btn){
+async function editProduct(id){
   const p = products.find(x=>x.id===id);
   const name = prompt('Neuer Name:',p.name);
   const price = prompt('Neuer Preis:',p.price);
@@ -203,7 +213,7 @@ async function editProduct(id,btn){
   renderProducts();
 }
 
-// Neues Produkt erstellen
+// Produkt erstellen
 addProductBtn.addEventListener('click', async ()=>{
   const file = await selectFile();
   if(!file) return;
@@ -215,7 +225,7 @@ addProductBtn.addEventListener('click', async ()=>{
   renderProducts();
 });
 
-// ------------------ Sets ------------------
+// ------------------ SETS ------------------
 async function loadSets(){
   const snapshot = await db.collection('sets').get();
   sets = snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
@@ -226,13 +236,14 @@ function renderSets(){
   sets.forEach(s=>{
     const div = document.createElement('div');
     div.className='set';
-    const itemsOptions = products.map(p=>`<option value="${p.name}" ${s.items?.includes(p.name)?'selected':''}>${p.name}</option>`).join('');
+    const items = s.items || [];
+    const itemsOptions = products.map(p=>`<option value="${p.name}" ${items.includes(p.name)?'selected':''}>${p.name}</option>`).join('');
     div.innerHTML=`
       <h3>${s.name}</h3>
       <p>Preis: <span>${s.price}</span></p>
       <p>Produkte:</p>
       <select multiple disabled>${itemsOptions}</select>
-      ${loggedIn?'<span class="edit-btn" onclick="editSet(\''+s.id+'\', this)">Bearbeiten</span>':''}
+      ${loggedIn?'<span class="edit-btn" onclick="editSet(\''+s.id+'\')">Bearbeiten</span>':''}
     `;
     setList.appendChild(div);
   });
@@ -249,7 +260,7 @@ async function editSet(id){
   renderSets();
 }
 
-// Neues Set erstellen
+// Set erstellen
 addSetBtn.addEventListener('click', async ()=>{
   const name = prompt('Set Name:');
   const price = prompt('Preis:');
@@ -259,9 +270,6 @@ addSetBtn.addEventListener('click', async ()=>{
   renderSets();
 });
 
-// Initial load
-loadProducts().then(renderProducts);
-loadSets().then(renderSets);
 </script>
 </body>
 </html>
