@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="de">
 <head>
 <meta charset="UTF-8">
@@ -88,7 +88,7 @@ footer a{color:#00ffff;margin:0 0.5rem;text-decoration:none;}
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
 
 <script>
-// Firebase konfigurieren
+// ------------------ Firebase konfigurieren ------------------
 const firebaseConfig = {
   apiKey: "AIzaSyC3llqOYDV2GJrg5NAEThQe0tI8LDqQpD4",
   authDomain: "lamacos-technolygies.firebaseapp.com",
@@ -101,6 +101,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const storage = firebase.storage();
 
+// ------------------ Elemente ------------------
 const rgbCorner = document.getElementById('rgb-corner');
 const loginModal = document.getElementById('loginModal');
 const correctCode = "kdjfj_kduv,_odig158.!";
@@ -117,16 +118,16 @@ const setList = document.getElementById('setList');
 let products = [];
 let sets = [];
 
-// Login Modal öffnen
+// ------------------ LOGIN ------------------
 rgbCorner.addEventListener('click', ()=>{ loginModal.classList.toggle('active'); });
 
-// ------------------ LOGIN ------------------
 async function login(){
   const code = document.getElementById('loginCode').value;
   if(code===correctCode){
     loggedIn = true;
     loginModal.classList.remove('active');
     showButtons();
+    await ensureCoverExists();
     await loadCover();
     await loadProducts();
     renderProducts();
@@ -142,7 +143,7 @@ function showButtons(){
   addSetBtn.style.display='inline-block';
 }
 
-// ------------------ DATEI AUSWÄHLEN ------------------
+// ------------------ FILE SELECT & UPLOAD ------------------
 function selectFile(){
   return new Promise(resolve=>{
     const input=document.createElement('input');
@@ -169,11 +170,19 @@ coverInput.addEventListener('change', async (e)=>{
   await db.collection('home').doc('cover').set({img:url});
 });
 
-// Cover beim Start laden
+// Cover immer laden / default setzen
+async function ensureCoverExists(){
+  const doc = await db.collection('home').doc('cover').get();
+  if(!doc.exists){
+    const defaultUrl = 'https://via.placeholder.com/1200x300/222222/00ffff?text=lamacOs+Gaming';
+    await db.collection('home').doc('cover').set({img:defaultUrl});
+  }
+}
+
 async function loadCover(){
   const doc = await db.collection('home').doc('cover').get();
   if(doc.exists){
-    coverImg.src = doc.data().img;
+    coverImg.src = doc.data().img || 'https://via.placeholder.com/1200x300/222222/00ffff?text=lamacOs+Gaming';
   }
 }
 
@@ -198,30 +207,41 @@ function renderProducts(){
   });
 }
 
-// Produkt bearbeiten
 async function editProduct(id){
   const p = products.find(x=>x.id===id);
-  const name = prompt('Neuer Name:',p.name);
-  const price = prompt('Neuer Preis:',p.price);
-  const file = await selectFile();
+  if(!p) return;
+
+  const name = prompt('Neuer Name:',p.name)?.trim();
+  if(!name) return alert('Name darf nicht leer sein.');
+
+  const price = prompt('Neuer Preis:',p.price)?.trim();
+  if(!price) return alert('Preis darf nicht leer sein.');
+
   let img = p.img;
+  const file = await selectFile();
   if(file){
     img = await uploadFile(file,`products/${Date.now()}_${file.name}`);
   }
+
   await db.collection('products').doc(id).update({name,price,img});
   await loadProducts();
   renderProducts();
 }
 
-// Produkt erstellen
 addProductBtn.addEventListener('click', async ()=>{
   const file = await selectFile();
   if(!file) return;
+
   const url = await uploadFile(file, `products/${Date.now()}_${file.name}`);
-  const name = prompt('Produktname:');
-  const price = prompt('Preis:');
+
+  const name = prompt('Produktname:')?.trim();
+  if(!name) return alert('Produktname darf nicht leer sein.');
+
+  const price = prompt('Preis:')?.trim();
+  if(!price) return alert('Preis darf nicht leer sein.');
+
   const docRef = await db.collection('products').add({img:url,name,price});
-  products.push({id:docRef.id,img:url,name,price});
+  await loadProducts();
   renderProducts();
 });
 
@@ -249,27 +269,41 @@ function renderSets(){
   });
 }
 
-// Set bearbeiten
 async function editSet(id){
   const s = sets.find(x=>x.id===id);
-  const name = prompt('Neuer Set Name:',s.name);
-  const price = prompt('Neuer Preis:',s.price);
-  const selectedProducts = prompt('Produkte (Komma getrennt, exakt wie Namen):',s.items?.join(',')||'').split(',').map(x=>x.trim());
+  if(!s) return;
+
+  const name = prompt('Neuer Set Name:',s.name)?.trim();
+  if(!name) return alert('Name darf nicht leer sein.');
+
+  const price = prompt('Neuer Preis:',s.price)?.trim();
+  if(!price) return alert('Preis darf nicht leer sein.');
+
+  const itemsInput = prompt('Produkte (Komma getrennt, exakt wie Namen):',s.items?.join(',')||'');
+  if(!itemsInput) return alert('Mindestens ein Produkt muss angegeben werden.');
+  const selectedProducts = itemsInput.split(',').map(x=>x.trim()).filter(x=>x);
+
   await db.collection('sets').doc(id).update({name,price,items:selectedProducts});
   await loadSets();
   renderSets();
 }
 
-// Set erstellen
 addSetBtn.addEventListener('click', async ()=>{
-  const name = prompt('Set Name:');
-  const price = prompt('Preis:');
-  const selectedProducts = prompt('Produkte (Komma getrennt, exakt wie Namen):').split(',').map(s=>s.trim());
+  const name = prompt('Set Name:')?.trim();
+  if(!name) return alert('Name darf nicht leer sein.');
+
+  const price = prompt('Preis:')?.trim();
+  if(!price) return alert('Preis darf nicht leer sein.');
+
+  const itemsInput = prompt('Produkte (Komma getrennt, exakt wie Namen):');
+  if(!itemsInput) return alert('Mindestens ein Produkt muss angegeben werden.');
+  const selectedProducts = itemsInput.split(',').map(x=>x.trim()).filter(x=>x);
+
   const docRef = await db.collection('sets').add({name,price,items:selectedProducts});
-  sets.push({id:docRef.id,name,price,items:selectedProducts});
+  await loadSets();
   renderSets();
 });
-
 </script>
+
 </body>
 </html>
